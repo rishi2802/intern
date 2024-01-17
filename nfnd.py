@@ -9,13 +9,21 @@ def get_emails_from_page(url, session):
         response.raise_for_status()
 
         soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract email addresses using a regular expression
-        emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', soup.get_text())
+
+        # Extract email addresses from mailto links with "Email" text
+        email_links = soup.find_all('a', href=re.compile(r'mailto:'), string='Email')
+        emails = [re.sub(r'^mailto:', '', link['href']) for link in email_links]
+
         return emails
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching content from {url}: {e}")
         return []
+
+def save_emails_to_file(emails, filename='extracted_emails.txt'):
+    with open(filename, 'w') as file:
+        for email in emails:
+            file.write(email + '\n')
 
 def main():
     main_page_url = 'https://www.bakerlaw.com/professionals/'
@@ -35,25 +43,17 @@ def main():
             response.raise_for_status()
 
             main_soup = BeautifulSoup(response.content, 'html.parser')
-            # Find all the links on the main page
-            links = main_soup.find_all('a', href=True)
+            # Find all the links on the main page with the text 'Email'
+            email_links = main_soup.find_all('a', href=re.compile(r'mailto:'), string='Email')
 
-            for link in links:
-                # Construct the absolute URL for the linked page
-                linked_page_url = link['href']
-                if not linked_page_url.startswith('http'):
-                    linked_page_url = main_page_url + linked_page_url
+            extracted_emails = [re.sub(r'^mailto:', '', link['href']) for link in email_links]
 
-                # Get emails from the linked page
-                linked_emails = get_emails_from_page(linked_page_url, session)
-
-                if linked_emails:
-                    print(f"Emails from {linked_page_url}: {linked_emails}")
-                else:
-                    print(f"No emails found on {linked_page_url}")
-
-                # Add a delay between requests to avoid being blocked or rate-limited
-                time.sleep(1)
+            if extracted_emails:
+                print(f"Emails from {main_page_url}: {extracted_emails}")
+                # Save extracted emails to a file
+                save_emails_to_file(extracted_emails)
+            else:
+                print(f"No emails found on {main_page_url}")
 
         except requests.exceptions.RequestException as e:
             print(f"Error fetching content from {main_page_url}: {e}")
